@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 
 interface MarketData {
   price: number;
@@ -14,6 +15,7 @@ export function LiveMarket() {
   const [data, setData] = useState<MarketData | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastDataRef = useRef<MarketData | null>(null);
 
   useEffect(() => {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'wss://ws.bubble.trade';
@@ -21,38 +23,52 @@ export function LiveMarket() {
     let reconnectTimeout: NodeJS.Timeout;
 
     const connect = () => {
-      ws = new WebSocket(wsUrl);
+      try {
+        ws = new WebSocket(wsUrl);
 
-      ws.onopen = () => {
-        setConnected(true);
-        setError(null);
-      };
+        ws.onopen = () => {
+          setConnected(true);
+          setError(null);
+        };
 
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'grid' || msg.type === 'price') {
-            setData({
-              price: msg.price || msg.currentPrice,
-              volBand: msg.volBand,
-              vol: msg.vol || msg.sigma,
-              killswitchActive: msg.killswitchActive,
-            });
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'grid' || msg.type === 'price') {
+              const newData: MarketData = {
+                price: msg.price || msg.currentPrice || 0,
+                volBand: msg.volBand || 'unknown',
+                vol: msg.annualizedVol || msg.vol || msg.sigma || 0,
+                killswitchActive: msg.killswitchActive || false,
+              };
+              
+              // Only update if values actually changed (prevents flashing)
+              const last = lastDataRef.current;
+              if (!last || 
+                  last.price !== newData.price || 
+                  last.volBand !== newData.volBand ||
+                  last.killswitchActive !== newData.killswitchActive) {
+                lastDataRef.current = newData;
+                setData(newData);
+              }
+            }
+          } catch (e) {
+            // Ignore parse errors
           }
-        } catch (e) {
-          // Ignore parse errors
-        }
-      };
+        };
 
-      ws.onclose = () => {
-        setConnected(false);
-        reconnectTimeout = setTimeout(connect, 3000);
-      };
+        ws.onclose = () => {
+          setConnected(false);
+          reconnectTimeout = setTimeout(connect, 3000);
+        };
 
-      ws.onerror = () => {
-        setError('Connection failed');
-        setConnected(false);
-      };
+        ws.onerror = () => {
+          setError('Connection failed');
+          setConnected(false);
+        };
+      } catch (e) {
+        setError('Failed to connect');
+      }
     };
 
     connect();
@@ -63,75 +79,94 @@ export function LiveMarket() {
     };
   }, []);
 
-  const volBandColors: Record<string, string> = {
-    very_low: 'text-green-400',
-    low: 'text-green-300',
-    med_low: 'text-lime-400',
-    med: 'text-yellow-400',
-    med_high: 'text-orange-400',
-    high: 'text-orange-500',
-    vhigh: 'text-red-400',
-    extreme: 'text-red-500',
-    extreme_150: 'text-red-600',
-    extreme_200: 'text-red-700',
-    extreme_300: 'text-red-800',
-    crisis: 'text-red-900',
+  const volBandConfig: Record<string, { color: string; bg: string }> = {
+    very_low: { color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    low: { color: 'text-green-400', bg: 'bg-green-500/10' },
+    med_low: { color: 'text-lime-400', bg: 'bg-lime-500/10' },
+    med: { color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+    med_high: { color: 'text-amber-400', bg: 'bg-amber-500/10' },
+    high: { color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    vhigh: { color: 'text-red-400', bg: 'bg-red-500/10' },
+    extreme: { color: 'text-red-500', bg: 'bg-red-500/10' },
+    extreme_150: { color: 'text-red-600', bg: 'bg-red-600/10' },
+    extreme_200: { color: 'text-rose-600', bg: 'bg-rose-600/10' },
+    extreme_300: { color: 'text-rose-700', bg: 'bg-rose-700/10' },
+    crisis: { color: 'text-rose-900', bg: 'bg-rose-900/20' },
   };
 
+  const bandStyle = volBandConfig[data?.volBand || ''] || { color: 'text-zinc-400', bg: 'bg-zinc-500/10' };
+
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white">Live Market</h3>
+    <div className="relative overflow-hidden rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/50">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+          <span className="text-2xl">📡</span> Live Market
+        </h3>
         <div className={cn(
-          'flex items-center gap-2 text-sm',
-          connected ? 'text-green-400' : 'text-red-400'
+          'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all',
+          connected 
+            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+            : 'bg-red-500/10 text-red-400 border border-red-500/20'
         )}>
-          <div className={cn(
-            'w-2 h-2 rounded-full',
-            connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-          )} />
+          {connected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
           {connected ? 'Live' : 'Disconnected'}
         </div>
       </div>
 
-      {data ? (
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm text-zinc-500">BTC Price</p>
-            <p className="text-2xl font-bold text-white font-mono">
-              ${data.price?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
+      {/* Content */}
+      <div className="p-6">
+        {data ? (
+          <div className="grid grid-cols-2 gap-6">
+            {/* Price */}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">BTC Price</p>
+              <p className="text-3xl font-bold text-white font-mono tracking-tight">
+                ${data.price?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+
+            {/* Vol Band */}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Vol Band</p>
+              <div className={cn('inline-flex items-center px-3 py-1 rounded-lg', bandStyle.bg)}>
+                <p className={cn('text-2xl font-bold uppercase', bandStyle.color)}>
+                  {data.volBand?.replace(/_/g, ' ')}
+                </p>
+              </div>
+            </div>
+
+            {/* Volatility */}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Annualized Vol</p>
+              <p className="text-2xl font-semibold text-white">
+                {((data.vol || 0) * 100).toFixed(1)}%
+              </p>
+            </div>
+
+            {/* Killswitch */}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Killswitch</p>
+              {data.killswitchActive ? (
+                <div className="flex items-center gap-2 text-red-500">
+                  <AlertTriangle className="w-5 h-5 animate-pulse" />
+                  <span className="text-xl font-bold">ACTIVE</span>
+                </div>
+              ) : (
+                <p className="text-2xl font-semibold text-emerald-400">Off</p>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-zinc-500">Vol Band</p>
-            <p className={cn(
-              'text-2xl font-bold',
-              volBandColors[data.volBand] || 'text-white'
-            )}>
-              {data.volBand}
-            </p>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-40 text-zinc-500">
+            <div className="w-8 h-8 border-2 border-zinc-600 border-t-cyan-500 rounded-full animate-spin mb-3" />
+            <p>{error || 'Connecting to WebSocket...'}</p>
           </div>
-          <div>
-            <p className="text-sm text-zinc-500">Volatility</p>
-            <p className="text-xl font-semibold text-white">
-              {((data.vol || 0) * 100).toFixed(1)}%
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-zinc-500">Killswitch</p>
-            <p className={cn(
-              'text-xl font-semibold',
-              data.killswitchActive ? 'text-red-500' : 'text-green-500'
-            )}>
-              {data.killswitchActive ? 'ACTIVE' : 'Off'}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-center justify-center h-32 text-zinc-500">
-          {error || 'Connecting...'}
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Decorative gradient */}
+      <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-3xl rounded-full" />
     </div>
   );
 }

@@ -9,13 +9,15 @@ import {
   Target, 
   Layers,
   RefreshCw,
-  Sparkles
+  BarChart3,
+  Zap
 } from 'lucide-react';
 import { StatsCard } from '@/components/cards/StatsCard';
 import { ServiceStatus } from '@/components/cards/ServiceStatus';
 import { VolBandChart } from '@/components/charts/VolBandChart';
 import { RecentBets } from '@/components/tables/RecentBets';
 import { LiveMarket } from '@/components/live/LiveMarket';
+import { GridView } from '@/components/live/GridView';
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 
 interface Stats {
@@ -63,7 +65,7 @@ export default function Dashboard() {
         fetch('/api/stats'),
         fetch('/api/health'),
         fetch('/api/calibration'),
-        fetch('/api/bets?limit=15'),
+        fetch('/api/bets?limit=10'),
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
@@ -91,12 +93,13 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-zinc-800 border-t-cyan-500 rounded-full animate-spin" />
-          <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-cyan-500" />
+      <div className="min-h-screen bg-[#0a0a0b] flex flex-col items-center justify-center">
+        <div className="relative mb-6">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-r from-cyan-500 to-purple-500 animate-pulse opacity-20 absolute inset-0 blur-xl" />
+          <div className="w-20 h-20 border-4 border-zinc-800 border-t-cyan-500 rounded-full animate-spin relative" />
         </div>
-        <p className="mt-4 text-zinc-500">Loading dashboard...</p>
+        <h2 className="text-2xl font-bold text-white mb-2">Bubble Trade</h2>
+        <p className="text-zinc-500">Loading dashboard...</p>
       </div>
     );
   }
@@ -104,116 +107,148 @@ export default function Dashboard() {
   const pnlVariant = (stats?.financials.platformPnL || 0) >= 0 ? 'success' : 'danger';
 
   return (
-    <div className="min-h-screen bg-black">
-      {/* Background Effects */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-500/5 blur-[120px] rounded-full" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/5 blur-[120px] rounded-full" />
+    <div className="min-h-screen bg-[#0a0a0b]">
+      {/* Gradient Background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-cyan-500/10 blur-[150px] rounded-full" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-500/10 blur-[150px] rounded-full" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-radial from-zinc-900/50 to-transparent rounded-full" />
       </div>
 
-      <div className="relative z-10 p-6 lg:p-8 max-w-[1600px] mx-auto">
+      {/* Content */}
+      <div className="relative z-10">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl lg:text-4xl font-bold text-white flex items-center gap-3">
-              <span className="text-4xl">🫧</span>
-              Bubble Trade
-              <span className="text-sm font-normal text-zinc-500 bg-zinc-800/50 px-2 py-1 rounded-full">
-                Admin
-              </span>
-            </h1>
-            <p className="text-zinc-500 mt-1">Real-time platform monitoring & analytics</p>
+        <header className="border-b border-zinc-800/50 bg-zinc-900/30 backdrop-blur-xl sticky top-0 z-50">
+          <div className="max-w-[1800px] mx-auto px-6 lg:px-8 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-2xl shadow-lg shadow-cyan-500/20">
+                  🫧
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-white">Bubble Trade</h1>
+                  <p className="text-sm text-zinc-500">Admin Dashboard</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-6">
+                {lastUpdate && (
+                  <p className="text-sm text-zinc-500 hidden sm:block">
+                    Last updated: {lastUpdate.toLocaleTimeString()}
+                  </p>
+                )}
+                <button
+                  onClick={() => fetchData(true)}
+                  disabled={refreshing}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-50 shadow-lg"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Refresh</span>
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            {lastUpdate && (
-              <p className="text-sm text-zinc-500">
-                Updated {lastUpdate.toLocaleTimeString()}
-              </p>
-            )}
-            <button
-              onClick={() => fetchData(true)}
-              disabled={refreshing}
-              className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm font-medium text-white transition-all disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
-        </div>
+        </header>
 
-        {/* Live Market + Health Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <LiveMarket />
-          {health && (
-            <ServiceStatus services={health.services} overallStatus={health.status} />
-          )}
-        </div>
+        {/* Main Content */}
+        <main className="max-w-[1800px] mx-auto px-6 lg:px-8 py-8">
+          {/* Top Row - Live Data */}
+          <section className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="w-5 h-5 text-cyan-400" />
+              <h2 className="text-lg font-semibold text-white">Live Data</h2>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <LiveMarket />
+              {health && (
+                <ServiceStatus services={health.services} overallStatus={health.status} />
+              )}
+            </div>
+          </section>
 
-        {/* Financial Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatsCard
-            title="Total Users"
-            value={formatNumber(stats?.users.total || 0, 0)}
-            icon={Users}
-          />
-          <StatsCard
-            title="Total Bets"
-            value={formatNumber(stats?.bets.total || 0, 0)}
-            subtitle={`${stats?.bets.active || 0} active`}
-            icon={Activity}
-          />
-          <StatsCard
-            title="Total Wagered"
-            value={formatCurrency(stats?.financials.totalWagered || 0)}
-            icon={DollarSign}
-          />
-          <StatsCard
-            title="Platform P&L"
-            value={formatCurrency(stats?.financials.platformPnL || 0)}
-            subtitle={`Edge: ${formatPercent(stats?.financials.realizedEdge || 0)}`}
-            icon={TrendingUp}
-            variant={pnlVariant}
-            trend={stats?.financials.platformPnL !== undefined ? {
-              value: (stats.financials.realizedEdge || 0) * 100,
-              isPositive: (stats.financials.platformPnL || 0) >= 0,
-            } : undefined}
-          />
-        </div>
+          {/* Grid View - Full Width */}
+          <section className="mb-8">
+            <GridView />
+          </section>
 
-        {/* Calibration Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatsCard
-            title="Total Observations"
-            value={formatNumber(calibration?.totals.observations || 0, 0)}
-            icon={Target}
-          />
-          <StatsCard
-            title="Active Cells"
-            value={`${formatNumber(calibration?.totals.activeCells || 0, 0)} / 1320`}
-            icon={Layers}
-          />
-          <StatsCard
-            title="Overall Hit Rate"
-            value={formatPercent(calibration?.totals.overallHitRate || 0)}
-          />
-          <StatsCard
-            title="Win Rate"
-            value={stats?.bets.total ? formatPercent(stats.bets.won / stats.bets.total) : '0.00%'}
-            subtitle={`${stats?.bets.won || 0}W / ${stats?.bets.lost || 0}L`}
-          />
-        </div>
+          {/* Stats Grid */}
+          <section className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <BarChart3 className="w-5 h-5 text-cyan-400" />
+              <h2 className="text-lg font-semibold text-white">Platform Metrics</h2>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatsCard
+                title="Total Users"
+                value={formatNumber(stats?.users.total || 0, 0)}
+                icon={Users}
+              />
+              <StatsCard
+                title="Total Bets"
+                value={formatNumber(stats?.bets.total || 0, 0)}
+                subtitle={`${stats?.bets.active || 0} active`}
+                icon={Activity}
+              />
+              <StatsCard
+                title="Total Wagered"
+                value={formatCurrency(stats?.financials.totalWagered || 0)}
+                icon={DollarSign}
+              />
+              <StatsCard
+                title="Platform P&L"
+                value={formatCurrency(stats?.financials.platformPnL || 0)}
+                subtitle={`Edge: ${formatPercent(stats?.financials.realizedEdge || 0)}`}
+                icon={TrendingUp}
+                variant={pnlVariant}
+              />
+            </div>
+          </section>
 
-        {/* Charts and Tables */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <VolBandChart data={calibration?.volBands || []} />
-          <RecentBets bets={bets} />
-        </div>
+          {/* Calibration Stats */}
+          <section className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Target className="w-5 h-5 text-cyan-400" />
+              <h2 className="text-lg font-semibold text-white">Calibration Engine</h2>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatsCard
+                title="Total Observations"
+                value={formatNumber(calibration?.totals.observations || 0, 0)}
+                icon={Target}
+              />
+              <StatsCard
+                title="Active Cells"
+                value={`${formatNumber(calibration?.totals.activeCells || 0, 0)} / 1,320`}
+                icon={Layers}
+              />
+              <StatsCard
+                title="Overall Hit Rate"
+                value={formatPercent(calibration?.totals.overallHitRate || 0)}
+              />
+              <StatsCard
+                title="Win Rate"
+                value={stats?.bets.total ? formatPercent(stats.bets.won / stats.bets.total) : '0.00%'}
+                subtitle={`${stats?.bets.won || 0}W / ${stats?.bets.lost || 0}L`}
+              />
+            </div>
+          </section>
+
+          {/* Charts & Tables */}
+          <section className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+            <VolBandChart data={calibration?.volBands || []} />
+            <RecentBets bets={bets} />
+          </section>
+        </main>
 
         {/* Footer */}
-        <div className="text-center text-zinc-600 text-sm mt-12 pb-8">
-          <p>Bubble Trade Admin Dashboard</p>
-          <p className="text-zinc-700 mt-1">Data refreshes automatically every 30 seconds</p>
-        </div>
+        <footer className="border-t border-zinc-800/50 bg-zinc-900/30 py-6">
+          <div className="max-w-[1800px] mx-auto px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-zinc-500">
+              <p>© 2026 Bubble Trade. Admin Dashboard.</p>
+              <p>Data refreshes automatically every 30 seconds</p>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );

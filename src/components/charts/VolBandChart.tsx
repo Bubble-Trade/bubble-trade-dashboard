@@ -49,7 +49,7 @@ export function VolBandChart({ data }: VolBandChartProps) {
                 border: '1px solid #27272a',
                 borderRadius: '8px',
               }}
-              formatter={(value: number) => [formatNumber(value), 'Observations']}
+              formatter={(value) => [formatNumber(value as number), 'Observations']}
               labelStyle={{ color: '#fff' }}
             />
             <Bar dataKey="observations" radius={[0, 4, 4, 0]}>

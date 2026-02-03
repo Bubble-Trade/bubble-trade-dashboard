@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 
@@ -8,19 +8,38 @@ interface MarketData {
   price: number;
   volBand: string;
   vol: number;
-  killswitchActive?: boolean;
+  killswitchActive: boolean;
 }
 
 export function LiveMarket() {
   const [data, setData] = useState<MarketData | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const lastDataRef = useRef<MarketData | null>(null);
+  
+  // Use refs to track latest values without causing re-renders
+  const dataRef = useRef<MarketData>({
+    price: 0,
+    volBand: '',
+    vol: 0,
+    killswitchActive: false,
+  });
 
   useEffect(() => {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'wss://ws.bubble.trade';
     let ws: WebSocket | null = null;
     let reconnectTimeout: NodeJS.Timeout;
+    let updateTimeout: NodeJS.Timeout;
+    
+    // Throttle UI updates to max 2 per second
+    let pendingUpdate = false;
+    const scheduleUpdate = () => {
+      if (pendingUpdate) return;
+      pendingUpdate = true;
+      updateTimeout = setTimeout(() => {
+        pendingUpdate = false;
+        setData({ ...dataRef.current });
+      }, 500);
+    };
 
     const connect = () => {
       try {
@@ -34,23 +53,20 @@ export function LiveMarket() {
         ws.onmessage = (event) => {
           try {
             const msg = JSON.parse(event.data);
-            if (msg.type === 'grid' || msg.type === 'price') {
-              const newData: MarketData = {
-                price: msg.price || msg.currentPrice || 0,
+            
+            if (msg.type === 'grid') {
+              // Grid messages have ALL the data - update everything
+              dataRef.current = {
+                price: msg.price || 0,
                 volBand: msg.volBand || 'unknown',
-                vol: msg.annualizedVol || msg.vol || msg.sigma || 0,
+                vol: msg.annualizedVol || 0,
                 killswitchActive: msg.killswitchActive || false,
               };
-              
-              // Only update if values actually changed (prevents flashing)
-              const last = lastDataRef.current;
-              if (!last || 
-                  last.price !== newData.price || 
-                  last.volBand !== newData.volBand ||
-                  last.killswitchActive !== newData.killswitchActive) {
-                lastDataRef.current = newData;
-                setData(newData);
-              }
+              scheduleUpdate();
+            } else if (msg.type === 'price') {
+              // Price-only messages - only update price, keep vol data
+              dataRef.current.price = msg.price || dataRef.current.price;
+              scheduleUpdate();
             }
           } catch (e) {
             // Ignore parse errors
@@ -75,6 +91,7 @@ export function LiveMarket() {
 
     return () => {
       clearTimeout(reconnectTimeout);
+      clearTimeout(updateTimeout);
       ws?.close();
     };
   }, []);
@@ -94,7 +111,7 @@ export function LiveMarket() {
     crisis: { color: 'text-rose-900', bg: 'bg-rose-900/20' },
   };
 
-  const bandStyle = volBandConfig[data?.volBand || ''] || { color: 'text-zinc-400', bg: 'bg-zinc-500/10' };
+  const bandStyle = data?.volBand ? (volBandConfig[data.volBand] || { color: 'text-zinc-400', bg: 'bg-zinc-500/10' }) : { color: 'text-zinc-400', bg: 'bg-zinc-500/10' };
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800">
@@ -116,13 +133,13 @@ export function LiveMarket() {
 
       {/* Content */}
       <div className="p-6">
-        {data ? (
+        {data && data.price > 0 ? (
           <div className="grid grid-cols-2 gap-6">
             {/* Price */}
             <div className="space-y-1">
               <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">BTC Price</p>
               <p className="text-3xl font-bold text-white font-mono tracking-tight">
-                ${data.price?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${data.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
 
@@ -131,7 +148,7 @@ export function LiveMarket() {
               <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Vol Band</p>
               <div className={cn('inline-flex items-center px-3 py-1 rounded-lg', bandStyle.bg)}>
                 <p className={cn('text-2xl font-bold uppercase', bandStyle.color)}>
-                  {data.volBand?.replace(/_/g, ' ')}
+                  {data.volBand?.replace(/_/g, ' ') || '—'}
                 </p>
               </div>
             </div>
@@ -140,7 +157,7 @@ export function LiveMarket() {
             <div className="space-y-1">
               <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Annualized Vol</p>
               <p className="text-2xl font-semibold text-white">
-                {((data.vol || 0) * 100).toFixed(1)}%
+                {(data.vol * 100).toFixed(1)}%
               </p>
             </div>
 

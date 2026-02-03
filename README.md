@@ -78,3 +78,6 @@ Deploy to Vercel:
 ## License
 
 Private - Bubble Trade
+
+---
+Part of the [Bubble-Trade](https://github.com/Bubble-Trade) organization.
